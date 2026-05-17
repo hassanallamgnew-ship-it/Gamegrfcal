@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة الأشكال الهندسية - CG Project</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; overflow: hidden; background: linear-gradient(to bottom, #0f172a, #1e1b4b); touch-action: none; }
+        #timerDisplay { 
+            font-family: 'Orbitron', sans-serif;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body class="text-white select-none">
+    <!-- واجهة المستخدم -->
+    <div class="absolute inset-0 z-10 pointer-events-none p-6 flex flex-col justify-between">
+        <div class="flex justify-between items-start w-full">
+            <div class="text-2xl font-bold bg-white/10 px-6 py-3 rounded-xl w-max backdrop-blur-md">النتيجة: <span id="scoreEl">0</span></div>
+            <!-- الموقت في أعلى الشاشة - تم تحديث الخط هنا -->
+            <div id="timerDisplay" class="text-4xl font-bold text-white tracking-widest">01:00</div>
+            <div class="text-lg font-bold bg-white/5 px-4 py-2 rounded-lg backdrop-blur-sm">الهدف: 1000</div>
+        </div>
+
+        <div id="modalEl" class="absolute inset-0 flex items-center justify-center bg-slate-900/80 pointer-events-auto backdrop-blur-sm transition-opacity">
+            <div class="text-center p-10 bg-slate-800 rounded-3xl shadow-2xl max-w-lg w-full mx-4 border border-slate-700">
+                <h1 id="modalTitle" class="text-5xl font-extrabold text-teal-400 mb-4">حرب الأشكال</h1>
+                <p id="modalDesc" class="text-slate-300 mb-6">Graphical game<br>اجمع 1000 نقطة خلال 60 ثانية للفوز!<br>استخدم الأسهم ⬅️ ➡️ للحركة، ومسافة (Space) للإطلاق</p>
+                <h2 id="finalScore" class="text-3xl font-bold mb-6 hidden">النتيجة: <span id="finalScoreEl" class="text-teal-400">0</span></h2>
+                <button id="startBtn" class="w-full bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold py-4 rounded-xl text-2xl transition-all shadow-lg">ابدأ اللعبة</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- لوحة الرسم -->
+    <canvas id="gameCanvas" class="block"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d'), el = id => document.getElementById(id);
+        let score = 0, frames = 0, isActive = false, enemies = [], projs = [], parts = [], player, W, H, stars = [];
+        let timeLeft = 60, timerId = null;
+        const MIN_SCORE_TO_WIN = 1000;
+        const keys = {}; 
+
+        const resize = () => { 
+            W = canvas.width = innerWidth; H = canvas.height = innerHeight; 
+            if(player) player.y = H - 50; 
+            if(!stars.length) stars = Array.from({length: 150}, () => ({x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.5, v: Math.random()*0.5+0.1}));
+        };
+        window.onresize = resize; resize();
+
+        window.onkeydown = e => keys[e.code] = true;
+        window.onkeyup = e => keys[e.code] = false;
+        window.onmousedown = window.ontouchstart = () => keys.Space = true;
+        window.onmouseup = window.ontouchend = () => keys.Space = false;
+
+        const drawPoly = (x, y, r, sides, angle, color) => {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.beginPath();
+            for(let i=0; i<sides; i++) ctx.lineTo(r * Math.cos(i*2*Math.PI/sides), r * Math.sin(i*2*Math.PI/sides));
+            ctx.closePath(); ctx.fillStyle = color; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle="#fff"; ctx.stroke(); ctx.restore();
+        };
+
+        const updateTimerDisplay = () => {
+            const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const secs = (timeLeft % 60).toString().padStart(2, '0');
+            el('timerDisplay').innerText = `${mins}:${secs}`;
+        };
+
+        const endGame = (reason = 'collision') => {
+            isActive = false; 
+            clearInterval(timerId);
+            el('modalEl').classList.remove('hidden'); 
+            el('finalScore').classList.remove('hidden');
+            el('finalScoreEl').innerText = score;
+
+            if (reason === 'timeout') {
+                if (score >= MIN_SCORE_TO_WIN) {
+                    el('modalTitle').innerText = "لقد فزت! ";
+                    el('modalTitle').className = "text-5xl font-extrabold text-green-400 mb-4";
+                } else {
+                    el('modalTitle').innerText = "خسرت! (وقت)";
+                    el('modalTitle').className = "text-4xl font-extrabold text-red-500 mb-4";
+                }
+            } else {
+                el('modalTitle').innerText = "خسرت ! (تحطمت المركبة)";
+                el('modalTitle').className = "text-4xl font-extrabold text-red-500 mb-4";
+            }
+            
+            el('modalDesc').classList.add('hidden'); 
+            el('startBtn').innerText = "إعادة المحاولة"; 
+            el('startBtn').className = "w-full bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold py-4 rounded-xl text-2xl transition-all shadow-lg";
+        };
+
+        function animate() {
+            if (!isActive) return;
+            requestAnimationFrame(animate);
+            frames++;
+            
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+            bgGrad.addColorStop(0, '#0f172a'); bgGrad.addColorStop(1, '#1e1b4b');
+            ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(s => {
+                s.y += s.v; 
+                if(s.y > H) { s.y = 0; s.x = Math.random() * W; }
+                ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+            });
+
+            if (keys.Space && frames % 3 === 0) projs.push({ x: player.x, y: player.y - player.r * 1.4, vx: 0, vy: -10, r: 6 });
+
+            player.x += (keys.ArrowRight ? 8 : 0) - (keys.ArrowLeft ? 8 : 0);
+            player.x = Math.max(player.r, Math.min(W - player.r, player.x));
+            
+            ctx.save(); ctx.translate(player.x, player.y);
+            ctx.fillStyle='#fff'; ctx.beginPath(); ctx.moveTo(0, -player.r*.2); ctx.lineTo(-player.r*.9, player.r*.8); ctx.lineTo(player.r*.9, player.r*.8); ctx.fill(); ctx.stroke();
+            ctx.fillStyle='#ea580c'; ctx.beginPath(); ctx.moveTo(0, -player.r*1.4); ctx.lineTo(-player.r*.4, -player.r*.1); ctx.lineTo(player.r*.4, -player.r*.1); ctx.fill(); ctx.stroke();
+            ctx.restore();
+
+            if (frames % 60 === 0) {
+                const r = Math.random() * 25 + 15, sides = Math.floor(Math.random() * 4) + 3;
+                enemies.push({ x: Math.random() * (W - r * 2) + r, y: -r, r, sides, c: ['#ef4444','#f59e0b','#8b5cf6','#ec4899'][sides-3], vx: 0, vy: 1.5 * (1 + score * 0.001), rot: 0 });
+            }
+
+            parts = parts.filter(p => {
+                p.x += p.vx*=0.98; p.y += p.vy*=0.98; p.a -= 0.015;
+                ctx.globalAlpha = Math.max(p.a, 0); ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fillStyle=p.c; ctx.fill(); ctx.globalAlpha = 1;
+                return p.a > 0;
+            });
+
+            projs = projs.filter(p => {
+                p.x += p.vx; p.y += p.vy;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fillStyle='#ea580c'; ctx.fill();
+                return p.x > 0 && p.x < W && p.y > 0 && p.y < H;
+            });
+
+            enemies = enemies.filter(e => {
+                e.x += e.vx; e.y += e.vy; e.rot += 0.02;
+                drawPoly(e.x, e.y, e.r, e.sides, e.rot, e.c);
+
+                if (Math.hypot(player.x - e.x, player.y - e.y) < e.r + player.r - 2) return endGame('collision'), false;
+
+                let alive = true;
+                projs = projs.filter(p => {
+                    if (Math.hypot(p.x - e.x, p.y - e.y) < e.r + p.r) {
+                        for(let i=0; i<15; i++) parts.push({ x:p.x, y:p.y, r:Math.random()*3, c:e.c, vx:(Math.random()-.5)*8, vy:(Math.random()-.5)*8, a:1 });
+                        if (e.r > 25) { e.r -= 10; score+=10; } else { alive=false; score+=25; }
+                        el('scoreEl').innerText = score;
+                        return false; 
+                    }
+                    return true;
+                });
+                return alive && e.y <= H + e.r;
+            });
+        }
+
+        el('startBtn').onclick = () => {
+            player = { x: W/2, y: H - 50, r: 20 };
+            enemies = []; projs = []; parts = []; score = frames = 0; 
+            timeLeft = 60; 
+            el('scoreEl').innerText = score;
+            updateTimerDisplay();
+            el('modalEl').classList.add('hidden'); 
+            isActive = true; 
+            
+            if(timerId) clearInterval(timerId);
+            timerId = setInterval(() => {
+                timeLeft--;
+                updateTimerDisplay();
+                if (timeLeft <= 0) endGame('timeout');
+            }, 1000);
+
+            animate();
+        };
+    </script>
+</body>
+</html>
