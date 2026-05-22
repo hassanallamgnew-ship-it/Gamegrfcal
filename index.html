@@ -86,7 +86,6 @@
             const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
             bgGrad.addColorStop(0, '#0f172a'); bgGrad.addColorStop(1, '#1e1b4b');
             ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
-
             ctx.fillStyle = '#ffffff';
             stars.forEach(s => {
                 s.y += s.v; 
