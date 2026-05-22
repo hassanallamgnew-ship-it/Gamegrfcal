@@ -15,15 +15,12 @@
     </style>
 </head>
 <body class="text-white select-none">
-   
     <div class="absolute inset-0 z-10 pointer-events-none p-6 flex flex-col justify-between">
         <div class="flex justify-between items-start w-full">
             <div class="text-2xl font-bold bg-white/10 px-6 py-3 rounded-xl w-max backdrop-blur-md">النتيجة: <span id="scoreEl">0</span></div>
-            <!-- الموقت في أعلى الشاشة - تم تحديث الخط هنا -->
             <div id="timerDisplay" class="text-4xl font-bold text-white tracking-widest">01:00</div>
             <div class="text-lg font-bold bg-white/5 px-4 py-2 rounded-lg backdrop-blur-sm">الهدف: 1000</div>
         </div>
-
         <div id="modalEl" class="absolute inset-0 flex items-center justify-center bg-slate-900/80 pointer-events-auto backdrop-blur-sm transition-opacity">
             <div class="text-center p-10 bg-slate-800 rounded-3xl shadow-2xl max-w-lg w-full mx-4 border border-slate-700">
                 <h1 id="modalTitle" class="text-5xl font-extrabold text-teal-400 mb-4">حرب الأشكال</h1>
@@ -33,7 +30,6 @@
             </div>
         </div>
     </div>
-
     <canvas id="gameCanvas" class="block"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d'), el = id => document.getElementById(id);
@@ -41,7 +37,6 @@
         let timeLeft = 60, timerId = null;
         const MIN_SCORE_TO_WIN = 1000;
         const keys = {}; 
-
         const resize = () => { 
             W = canvas.width = innerWidth; H = canvas.height = innerHeight; 
             if(player) player.y = H - 50; 
@@ -52,26 +47,22 @@
         window.onkeyup = e => keys[e.code] = false;
         window.onmousedown = window.ontouchstart = () => keys.Space = true;
         window.onmouseup = window.ontouchend = () => keys.Space = false;
-
         const drawPoly = (x, y, r, sides, angle, color) => {
             ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.beginPath();
             for(let i=0; i<sides; i++) ctx.lineTo(r * Math.cos(i*2*Math.PI/sides), r * Math.sin(i*2*Math.PI/sides));
             ctx.closePath(); ctx.fillStyle = color; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle="#fff"; ctx.stroke(); ctx.restore();
         };
-
         const updateTimerDisplay = () => {
             const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
             const secs = (timeLeft % 60).toString().padStart(2, '0');
             el('timerDisplay').innerText = `${mins}:${secs}`;
         };
-
         const endGame = (reason = 'collision') => {
             isActive = false; 
             clearInterval(timerId);
             el('modalEl').classList.remove('hidden'); 
             el('finalScore').classList.remove('hidden');
             el('finalScoreEl').innerText = score;
-
             if (reason === 'timeout') {
                 if (score >= MIN_SCORE_TO_WIN) {
                     el('modalTitle').innerText = "لقد فزت! ";
@@ -84,7 +75,6 @@
                 el('modalTitle').innerText = "خسرت ! (تحطمت المركبة)";
                 el('modalTitle').className = "text-4xl font-extrabold text-red-500 mb-4";
             }
-            
             el('modalDesc').classList.add('hidden'); 
             el('startBtn').innerText = "إعادة المحاولة"; 
             el('startBtn').className = "w-full bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold py-4 rounded-xl text-2xl transition-all shadow-lg";
